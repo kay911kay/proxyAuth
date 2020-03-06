@@ -11,6 +11,12 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
+#include "aes.h"
+#include "dh.h"
+#include <openssl/ssl.h>
+#include <openssl/rsa.h>
+#include <openssl/evp.h>
+
 
 #define SERVICE_NAME "Proxy Auth"
 #define SERVICE_DESC "Continuous Authentication via Bluetooth"
@@ -211,12 +217,58 @@ int connect_client(int s, struct sockaddr_rc *rem_addr, socklen_t *opt) {
     return client;
 }
 
+void init_ssl()
+{
+    SSL_load_error_strings();
+    SSL_library_init();
+    OpenSSL_add_all_algorithms();
+}
+
+void shutdown_ssl()
+{
+    SSL_shutdown(cSSL);
+    SSL_free(cSSL);
+}
+
+SSL *establish_ssl(int client, RSA *rsa)
+{
+    sslctx = SSL_CTX_new( SSLv23_server_method());
+    // SSL_CTX_set_options(sslctx, SSL_OP_SINGLE_DH_USE);
+
+    SL_CTX_use_RSAPrivateKey(ctx, rsa);
+    // SSL_CTX_use_certificate_file(sslctx, "/serverCert.pem" , SSL_FILETYPE_PEM);
+
+    cSSL = SSL_new(sslctx);
+    SSL_set_fd(cSSL, client);
+
+    if(ssl_accept(cSSL) <= 0)
+    {
+        shutdown_ssl();
+        return NULL;
+    }
+
+    return cSSL;
+}
+
+RSA *establish_key(int client)
+{
+    const kLen = 1024;
+    const kExp = 3;
+
+    RSA *rsa = RSA_generate_key(kLen, kExp, 0, 0);    
+
+    // TODO: Send public key to client
+
+    return rsa 
+}
+
 int main (int argc, char **argv)
 {
     struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
     int s, client, bytes_read;
     socklen_t opt = sizeof(rem_addr);
 
+    init_ssl()
     s = init_server(&loc_addr);
 
     
@@ -229,6 +281,18 @@ int main (int argc, char **argv)
     while(1) {
         if (client < 0) {
             client = connect_client(s, &rem_addr, &opt);
+	
+	    RSA *rsa = establish_key(client);
+            SSL *cSSL = establish_ssl(client, rsa);
+
+            if (!cSSL)
+            {
+		close(client);
+		close(s);
+
+		return -1;
+            }
+
             start = time(NULL);
             is_locked = 0; 
         }
@@ -237,7 +301,7 @@ int main (int argc, char **argv)
     	memset(buf, 0, sizeof(buf));
 
     	// read data from the client
-    	bytes_read = read(client, buf, sizeof(buf));
+    	bytes_read = SSL_read(cSSL, buf, sizeof(buf));
     	if(bytes_read > 0) {
             printf("received [%s]\n", buf);
             start = time(NULL);
@@ -258,7 +322,7 @@ int main (int argc, char **argv)
             break;
         }
     	
-    	if (bytes_read > 0 && write(client, buf, strlen(buf) < 0)) {
+    	if (bytes_read > 0 && SSL_write(cSSL, buf, strlen(buf) < 0)) {
     	    perror("Error writing to client");	
     	}
     }
