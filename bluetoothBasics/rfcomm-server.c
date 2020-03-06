@@ -15,6 +15,7 @@
 #include "dh.h"
 #include <openssl/ssl.h>
 #include <openssl/rsa.h>
+#include <openssl/rand.h>
 #include <openssl/evp.h>
 
 
@@ -224,7 +225,7 @@ void init_ssl()
     OpenSSL_add_all_algorithms();
 }
 
-void shutdown_ssl()
+void shutdown_ssl(SSL *cSSL)
 {
     SSL_shutdown(cSSL);
     SSL_free(cSSL);
@@ -232,18 +233,18 @@ void shutdown_ssl()
 
 SSL *establish_ssl(int client, RSA *rsa)
 {
-    sslctx = SSL_CTX_new( SSLv23_server_method());
+    SSL_CTX *ctx = SSL_CTX_new( SSLv23_server_method());
     // SSL_CTX_set_options(sslctx, SSL_OP_SINGLE_DH_USE);
 
-    SL_CTX_use_RSAPrivateKey(ctx, rsa);
+    SSL_CTX_use_RSAPrivateKey(ctx, rsa);
     // SSL_CTX_use_certificate_file(sslctx, "/serverCert.pem" , SSL_FILETYPE_PEM);
 
-    cSSL = SSL_new(sslctx);
+    SSL *cSSL = SSL_new(ctx);
     SSL_set_fd(cSSL, client);
 
-    if(ssl_accept(cSSL) <= 0)
+    if(SSL_accept(cSSL) <= 0)
     {
-        shutdown_ssl();
+        shutdown_ssl(cSSL);
         return NULL;
     }
 
@@ -252,14 +253,15 @@ SSL *establish_ssl(int client, RSA *rsa)
 
 RSA *establish_key(int client)
 {
-    const kLen = 1024;
-    const kExp = 3;
+    const int kLen = 1024;
+    const int kExp = 3;
 
+    RAND_poll();
     RSA *rsa = RSA_generate_key(kLen, kExp, 0, 0);    
 
     // TODO: Send public key to client
 
-    return rsa 
+    return rsa; 
 }
 
 int main (int argc, char **argv)
@@ -268,7 +270,9 @@ int main (int argc, char **argv)
     int s, client, bytes_read;
     socklen_t opt = sizeof(rem_addr);
 
-    init_ssl()
+    SSL *cSSL;
+    init_ssl();
+
     s = init_server(&loc_addr);
 
     
@@ -283,7 +287,7 @@ int main (int argc, char **argv)
             client = connect_client(s, &rem_addr, &opt);
 	
 	    RSA *rsa = establish_key(client);
-            SSL *cSSL = establish_ssl(client, rsa);
+            cSSL = establish_ssl(client, rsa);
 
             if (!cSSL)
             {
