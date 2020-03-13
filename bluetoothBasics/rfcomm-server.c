@@ -17,6 +17,7 @@
 #include <openssl/rsa.h>
 #include <openssl/rand.h>
 #include <openssl/evp.h>
+#include <openssl/pem.h>
 
 
 #define SERVICE_NAME "Proxy Auth"
@@ -231,12 +232,12 @@ void shutdown_ssl(SSL *cSSL)
     SSL_free(cSSL);
 }
 
-SSL *establish_ssl(int client, RSA *rsa)
+SSL *establish_ssl(int client, EVP_PKEY *pkey)
 {
     SSL_CTX *ctx = SSL_CTX_new( SSLv23_server_method());
     // SSL_CTX_set_options(sslctx, SSL_OP_SINGLE_DH_USE);
 
-    SSL_CTX_use_RSAPrivateKey(ctx, rsa);
+    SSL_CTX_use_PrivateKey(ctx, pkey);
     // SSL_CTX_use_certificate_file(sslctx, "/serverCert.pem" , SSL_FILETYPE_PEM);
 
     SSL *cSSL = SSL_new(ctx);
@@ -251,17 +252,59 @@ SSL *establish_ssl(int client, RSA *rsa)
     return cSSL;
 }
 
-RSA *establish_key(int client)
+EVP_PKEY *establish_key(int client)
 {
-    const int kLen = 1024;
-    const int kExp = 3;
-
     RAND_poll();
-    RSA *rsa = RSA_generate_key(kLen, kExp, 0, 0);    
 
-    // TODO: Send public key to client
+    EVP_PKEY_CTX *ctx;
+    EVP_PKEY *pkey = NULL;
 
-    return rsa; 
+    ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+
+    if(!ctx)
+	return NULL;
+
+    if (EVP_PKEY_keygen_init(ctx) <= 0)
+	return NULL;
+
+    if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 1024) <= 0)
+	return NULL;
+
+
+    if (EVP_PKEY_keygen(ctx, &pkey) <= 0)
+	return NULL;
+
+    return pkey;
+}
+/*
+void ec_copy_public_key(EVP_PKEY *pKey, uint8_t *keybuf)
+{
+    EC_KEY *pEcKey;
+    uint8_t encoded_key[MAX_KEYLEN_X962];
+    uint8_t *pMem;
+    int keylen = 0;
+
+    pEcKey = (EC_KEY *)EVP_PKEY_get0(pKey);
+
+    if (pEcKey){
+	pMem = encoded_key;
+        keylen = i2o_ECPublicKey(pEcKey, &pMem);
+
+	if (keylen){
+	    keylen = ipsec_ec_x962_decode(pEcKey, encoded_key, keylen, keybuf);
+	}
+    }
+}*/
+
+void send_public_key(int client, EVP_PKEY *pkey)
+{
+    //uint8_t public_key[128];
+    //ec_copy_public_key(pkey, public_key);
+    
+    FILE *f;
+    f = fopen("key.txt", "w");
+    
+    PEM_write_PUBKEY(f, pkey);
 }
 
 int main (int argc, char **argv)
@@ -271,11 +314,11 @@ int main (int argc, char **argv)
     socklen_t opt = sizeof(rem_addr);
 
     SSL *cSSL;
-    init_ssl();
+    EVP_PKEY *pkey;
 
+    init_ssl();
     s = init_server(&loc_addr);
 
-    
     time_t start, stop;
     int is_locked = 0; 
     client = -1;
@@ -286,13 +329,16 @@ int main (int argc, char **argv)
         if (client < 0) {
             client = connect_client(s, &rem_addr, &opt);
 	
-	    RSA *rsa = establish_key(client);
-            cSSL = establish_ssl(client, rsa);
+	    pkey = establish_key(client);
+	    send_public_key(client, pkey);
+            cSSL = establish_ssl(client, pkey);
 
             if (!cSSL)
             {
 		close(client);
 		close(s);
+
+		EVP_PKEY_free(pkey);
 
 		return -1;
             }
@@ -330,6 +376,9 @@ int main (int argc, char **argv)
     	    perror("Error writing to client");	
     	}
     }
+
+    EVP_PKEY_free(pkey);
+    shutdown_ssl(cSSL);
 
     // close connection
     close(client);
