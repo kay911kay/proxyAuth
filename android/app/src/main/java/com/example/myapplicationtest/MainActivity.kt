@@ -158,7 +158,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             Log.i("path", "CONNECT TO ME OUTSTREAM "+bArray.toString(Charsets.UTF_8))
-
+            //-------------------------------------------
 
             val name: String = device.name
 
