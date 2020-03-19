@@ -52,8 +52,9 @@ class ControlActivity: AppCompatActivity(){
         // not sure if we should just call the method or
 
         //receiveCommand()
-        test_button.setOnClickListener{ sendCommand("Hello World!")}
-
+        //test_button.setOnClickListener{ sendCommand("Hello World!")}
+        sendCommand("Connection Established")
+        receiveCommand()
         control_led_disconnect.setOnClickListener{ disconnect()}
 
     }
@@ -71,20 +72,21 @@ class ControlActivity: AppCompatActivity(){
 
     private fun receiveCommand(){
         var numBytes: Int // bytes returned from read()
-
-        // Keep listening to the InputStream until an exception occurs.
-        while (true) {
-            // Read from the InputStream.
-            numBytes = try {
-                m_bluetoothSocket!!.inputStream.read(mmBuffer)
-            } catch (e: IOException) {
-                Log.d("data", "Input stream was disconnected", e)
-                break
+        if (m_bluetoothSocket != null) {
+            // Keep listening to the InputStream until an exception occurs.
+            while (true) {
+                // Read from the InputStream.
+                numBytes = try {
+                    m_bluetoothSocket!!.inputStream.read(mmBuffer)
+                } catch (e: IOException) {
+                    Log.d("data", "Input stream was disconnected", e)
+                    break
+                }
+                // we have the data from the computer in the buffer mmBuffer now
+                // turn it into text here
+                toast("data received")
+                Log.d("data", mmBuffer.toString(Charsets.UTF_8))
             }
-            // we have the data from the computer in the buffer mmBuffer now
-            // turn it into text here
-            toast("data received")
-            Log.d("data", mmBuffer.toString(Charsets.UTF_8))
         }
 
     }
