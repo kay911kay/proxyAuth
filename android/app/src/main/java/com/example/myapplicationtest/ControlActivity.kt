@@ -56,6 +56,22 @@ class ControlActivity: AppCompatActivity(){
 
         control_led_disconnect.setOnClickListener{ disconnect()}
 
+        while(true){
+            receiveCommand()
+            handlemessage(mmBuffer.toString(Charsets.UTF_8))
+        }
+
+    }
+
+    private fun handlemessage(msg: String){
+        val msgID = msg.substring(0, 2)
+        when (msgID) {
+            "01" -> print("x == 1")
+            "02" -> print("x == 2")
+            else -> { // Note the block
+                print("x is neither 1 nor 2")
+            }
+        }
     }
 
     private fun sendCommand(input: String){
