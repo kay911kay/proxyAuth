@@ -29,8 +29,6 @@ class ControlActivity: AppCompatActivity(){
         lateinit var m_address: String
         lateinit var m_name: String
         private val mmBuffer: ByteArray = ByteArray(1024) // mmBuffer store for the stream
-
-
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,7 +38,7 @@ class ControlActivity: AppCompatActivity(){
         m_address = intent.getStringExtra(MainActivity.EXTRA_ADDRESS)
         m_name = intent.getStringExtra(MainActivity.DEVICE_NAME)
 
-        val cDevice = "Connected device: $m_name"
+        val cDevice = "Connected Device: $m_name"
         val cDeviceAddr = "Device Address: $m_address"
         connectedDevice.text = cDevice
         deviceAddress.text = cDeviceAddr
@@ -48,12 +46,7 @@ class ControlActivity: AppCompatActivity(){
         // connecting to the device
         ConnectToDevice(this).execute()
 
-        // should be receiving messages from the server at all times
-        // not sure if we should just call the method or
-
-
-        test_button.setOnClickListener{ sendCommand("Hello World!")}
-
+        test_button.setOnClickListener{ sendCommand("Hello World!")} //for now sending this
         control_led_disconnect.setOnClickListener{ disconnect()}
 
         while(true){
@@ -77,6 +70,7 @@ class ControlActivity: AppCompatActivity(){
     private fun sendCommand(input: String){
         if (m_bluetoothSocket != null){
             try{
+                //Log.d("data", "DATA Incoming")
                 Log.d("data", input)
                 m_bluetoothSocket!!.outputStream.write(input.toByteArray())
             } catch (e: IOException){
@@ -102,8 +96,7 @@ class ControlActivity: AppCompatActivity(){
                     Log.d("data", "Input stream was disconnected", e)
                     break
                 }
-                // we have the data from the computer in the buffer mmBuffer now
-                // turn it into text here
+                // we have the data from the computer in the buffer mmBuffer now, turn it into text here
                 toast("data received")
                 Log.d("data", mmBuffer.toString(Charsets.UTF_8))
             }
@@ -111,7 +104,6 @@ class ControlActivity: AppCompatActivity(){
         } catch (e: Exception){
             toast("Failed to read")
         }
-
     }
 
     private fun disconnect(){
@@ -123,18 +115,16 @@ class ControlActivity: AppCompatActivity(){
                 m_bluetoothSocket!!.close()
             } catch (e: IOException){
                 e.printStackTrace()
-            }
-            finally { //close the socket added
-                //m_bluetoothSocket = null
-
-                toast("Disconnecting from server")
+            } finally { // close the socket
+                m_bluetoothSocket = null
+                toast("Disconnecting from Server")
+                //m_isConnected = false
                 val intent = Intent(this, MainActivity::class.java)
                 startActivity(intent)
             }
         }
         finish()
     }
-
 
     private class ConnectToDevice(c: Context): AsyncTask<Void, Void, String>(){
 
@@ -147,7 +137,7 @@ class ControlActivity: AppCompatActivity(){
 
         override fun onPreExecute(){
             super.onPreExecute()
-            m_progress = ProgressDialog.show(context, "Connecting...", "Please wait")
+            m_progress = ProgressDialog.show(context, "Connecting...", "Please Wait")
         }
 
         override fun doInBackground(vararg p0: Void?): String?{
@@ -162,10 +152,8 @@ class ControlActivity: AppCompatActivity(){
                 }
             }catch (e: IOException){
                 connectSuccess =  false
-
-                Log.d("data", "FAILED TO CONNECT\n")
+                Log.d("data", "Failed to Connect \n")
                 e.printStackTrace()
-
             }
             return null
         }
@@ -173,15 +161,21 @@ class ControlActivity: AppCompatActivity(){
         override fun onPostExecute(result: String?){
             super.onPostExecute(result)
             if(!connectSuccess){
-                Log.i("data", "Couldn't CONNECT")
+                Log.i("data", "Unable to Connect")
                 val intent = Intent(this.context, MainActivity::class.java)
-                this.context.toast("Failed to connect to " + m_address)
+                this.context.toast("Failed to Connect to " + m_address)
                 this.context.startActivity(intent)
             } else {
-                Log.i("data", "CONNECTED")
+                Log.i("data", "Successfully Connected")
                 m_isConnected = true
             }
             m_progress.dismiss()
         }
     }
 }
+
+
+// for disconnet(), if needed
+/** finally {
+    m_bluetoothSocket!!.close()
+} */
