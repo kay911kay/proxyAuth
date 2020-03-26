@@ -49,25 +49,40 @@ class ControlActivity: AppCompatActivity(){
         test_button.setOnClickListener{ sendCommand("Hello World!")} //for now sending this
         control_led_disconnect.setOnClickListener{ disconnect()}
 
-        while(true){
+
+        /*
+        //toast("existence is main for a programmer")
+        Log.i("data", "start of loop \n")
+        loop@ while(true){
+            if(m_isConnected == true){
+                Log.i("data", "sent message \n")
+                break@loop
+            }
+        }
+        sendCommand("11")
+        Log.i("data", "sent message \n")
+        while(m_isConnected == true){
+            Log.i("data", "ready to receive \n")
             receiveCommand()
             handlemessage(mmBuffer.toString(Charsets.UTF_8))
         }
+        */
 
     }
 
     private fun handlemessage(msg: String){
         val msgID = msg.substring(0, 2)
         when (msgID) {
-            "01" -> print("x == 1")
-            "02" -> print("x == 2")
+            "11" -> {Log.i("data", "11 \n")
+            sendCommand("11")}
+            "12" -> Log.i("data", "12 \n")
             else -> { // Note the block
-                print("x is neither 1 nor 2")
+                Log.i("data", "What the FUCK \n")
             }
         }
     }
 
-    private fun sendCommand(input: String){
+    fun sendCommand(input: String){
         if (m_bluetoothSocket != null){
             try{
                 //Log.d("data", "DATA Incoming")
@@ -77,7 +92,7 @@ class ControlActivity: AppCompatActivity(){
                 e.printStackTrace()
             }
         }
-        receiveCommand()
+        //receiveCommand()
     }
 
     private fun receiveCommand(){
@@ -135,6 +150,57 @@ class ControlActivity: AppCompatActivity(){
             this.context = c
         }
 
+        fun sendCommand(input: String){
+            if (m_bluetoothSocket != null){
+                try{
+                    //Log.d("data", "DATA Incoming")
+                    Log.d("data", input)
+                    m_bluetoothSocket!!.outputStream.write(input.toByteArray(Charsets.UTF_8))
+                } catch (e: IOException){
+                    e.printStackTrace()
+                }
+            }
+            //receiveCommand()
+        }
+
+        private fun receiveCommand(){
+            var numBytes: Int // bytes returned from read()
+            try {
+                // Keep listening to the InputStream until an exception occurs.
+                while (true) {
+                    // Read from the InputStream.
+                    //numBytes =
+                    try {
+                        numBytes = m_bluetoothSocket!!.inputStream.read(mmBuffer)
+                        Log.d("data", numBytes.toString())
+                        Log.d("data", mmBuffer.toString(Charsets.UTF_8))
+                        //toast(mmBuffer.toString(Charsets.UTF_8))
+                    } catch (e: IOException) {
+                        Log.d("data", "Input stream was disconnected", e)
+                        break
+                    }
+                    // we have the data from the computer in the buffer mmBuffer now, turn it into text here
+                    //toast("data received")
+                    Log.d("data", mmBuffer.toString(Charsets.UTF_8))
+                }
+
+            } catch (e: Exception){
+                Log.d("DATA","failed to read")
+            }
+        }
+
+        private fun handlemessage(msg: String){
+            val msgID = msg.substring(0, 2)
+            when (msgID) {
+                "11" -> {Log.i("data", "11 \n")
+                    sendCommand("11")}
+                "12" -> Log.i("data", "12 \n")
+                else -> { // Note the block
+                    Log.i("data", "What the FUCK \n")
+                }
+            }
+        }
+
         override fun onPreExecute(){
             super.onPreExecute()
             m_progress = ProgressDialog.show(context, "Connecting...", "Please Wait")
@@ -170,6 +236,21 @@ class ControlActivity: AppCompatActivity(){
                 m_isConnected = true
             }
             m_progress.dismiss()
+
+            Log.i("data", "start of loop \n")
+            loop@ while(true){
+                if(m_isConnected == true){
+                    Log.i("data", "sent message \n")
+                    break@loop
+                }
+            }
+            sendCommand("11")
+            Log.i("data", "sent message \n")
+            while(m_isConnected == true){
+                Log.i("data", "ready to receive \n")
+                receiveCommand()
+                handlemessage(mmBuffer.toString(Charsets.UTF_8))
+            }
         }
     }
 }

@@ -241,7 +241,11 @@ int main (int argc, char **argv)
     	if(bytes_read > 0) {
             printf("received [%s]\n", buf);
             start = time(NULL);
-            is_locked = 0; 
+            is_locked = 0;
+
+            if((char)buf[0] == '1' && (char)buf[1] == '1'){
+                printf("message interpreted\n");
+            } 
             bytes_read = write(client,buf,sizeof(buf));
             printf("wrote [%s]\n", buf);
     	}
