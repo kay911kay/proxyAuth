@@ -6,15 +6,31 @@
 #include <bluetooth/rfcomm.h>
 #include <bluetooth/sdp.h>
 #include <bluetooth/sdp_lib.h>
+#include <errno.h>
+#include <limits.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
+#include <unistd.h>
+
+#include "pam_misc.h"
+#include "pam_bt_misc.h"
+#include "pam_bt_pair.h"
+#include "pam_bt_trust.h"
+
 
 #define SERVICE_NAME "Proxy Auth"
 #define SERVICE_DESC "Continuous Authentication via Bluetooth"
 #define SERVICE_PROV "ProxyAuth"
+
+struct server_data_t {
+    int server;
+    int *client;
+    sdp_session_t *session;
+};
 
 /*
 * Special Thanks to: Ryan Scott for providing how to register service and Albert Huang
@@ -25,6 +41,18 @@ sdp_session_t *sdp_connect( const bdaddr_t *src, const bdaddr_t *dst, uint32_t f
 int sdp_close( sdp_session_t *session );
 
 int sdp_record_register(sdp_session_t *sess, sdp_record_t *rec, uint8_t flags);
+
+void terminate_server(int server, int client, sdp_session_t *session) {
+    if (client) {
+        close(client);
+    }
+    if (server) {
+        close(server);
+    }
+    if (session) {
+        sdp_close(session);
+    }
+}
 
 /*
 * Set the general service ID and service class
@@ -117,7 +145,11 @@ sdp_session_t *register_service(uint8_t rfcomm_channel) {
     //maintain a list of four 32-bit uuid which will be used to form a 128-bit uuid for setting a uuid to our service
     uint32_t svc_uuid_int[] = { 0x01110000, 0x00100000, 0x80000080, 0xFB349B5F };
     
-    uuid_t root_uuid, l2cap_uuid, rfcomm_uuid, svc_uuid, svc_class_uuid;
+    uuid_t root_uuid; 
+    uuid_t l2cap_uuid; 
+    uuid_t rfcomm_uuid;
+    uuid_t svc_uuid;
+    uuid_t svc_class_uuid;
 
     //NOTE: sdp_list_t is a linkedlist which needs to be free using sdp_list_free after use
     sdp_list_t *l2cap_list = 0,
@@ -129,25 +161,25 @@ sdp_session_t *register_service(uint8_t rfcomm_channel) {
                  *profile_list = 0;
     sdp_data_t *channel = 0; 
     sdp_profile_desc_t profile;
-    sdp_record_t record = { 0 };
+    sdp_record_t *record = sdp_record_alloc();//{ 0 };
     sdp_session_t *session = 0;
 
     const char *service_name = SERVICE_NAME;
     const char *svc_dsc = SERVICE_DESC;
     const char *service_prov = SERVICE_PROV;
 
-    set_service(&svc_uuid, &svc_class_uuid, &svc_class_list, &record, svc_uuid_int);
+    set_service(&svc_uuid, &svc_class_uuid, &svc_class_list, record, svc_uuid_int);
     
-    set_bluetooth_service_info(&profile, &profile_list, &record);
+    set_bluetooth_service_info(&profile, &profile_list, record);
 
-    set_browsable(&root_list, &record, &root_uuid);
+    set_browsable(&root_list, record, &root_uuid);
 
     set_l2cap_info(&l2cap_list, &proto_list, &l2cap_uuid);
 
-    register_rfcomm_sock(&channel, &record, &rfcomm_list, &proto_list, &access_proto_list, &rfcomm_uuid, &rfcomm_channel);
+    register_rfcomm_sock(&channel, record, &rfcomm_list, &proto_list, &access_proto_list, &rfcomm_uuid, &rfcomm_channel);
 
     // set the name, provider, and description
-    sdp_set_info_attr(&record, service_name, service_prov, svc_dsc);
+    sdp_set_info_attr(record, service_name, service_prov, svc_dsc);
 
     // connect to the local SDP server, register the service record, and disconnect
     /*
@@ -155,27 +187,29 @@ sdp_session_t *register_service(uint8_t rfcomm_channel) {
     *   (Bluez implementation of SDP server which is a daemon) what to advertise. This is done through
     *   the pipe `/var/run/sdp`
     */
+
     session = sdp_connect(BDADDR_ANY, BDADDR_LOCAL, SDP_RETRY_IF_BUSY);
-    sdp_record_register(session, &record, 0);
+    sdp_record_register(session, record, 0);
 
     // cleanup
     sdp_data_free(channel);
     sdp_list_free(l2cap_list, 0);
     sdp_list_free(rfcomm_list, 0);
     sdp_list_free(root_list, 0);
+    sdp_list_free(proto_list, 0);
     sdp_list_free(access_proto_list, 0);
     sdp_list_free(svc_class_list, 0);
     sdp_list_free(profile_list, 0);
-
+    sdp_record_free(record);
     return session;
 }
 
 /*
 * Setup the bluetooth server
 * 
-* @return return the socket file descriptor
+* @return return the server's socket file descriptor
 */ 
-int init_server(struct sockaddr_rc *loc_addr) {
+int init_server(struct sockaddr_rc *loc_addr, sdp_session_t **session) {
     // allocate socket
     int s = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
     int port = 1;
@@ -189,24 +223,115 @@ int init_server(struct sockaddr_rc *loc_addr) {
     bind(s, (struct sockaddr *)loc_addr, sizeof(*loc_addr));
 
     //register service added
-    sdp_session_t *session = register_service(port); 
+    *session = register_service(port);
 
     // put socket into listening mode
-    listen(s, 1);
+    listen(s, port);
 
     return s;   
 }
 
-int connect_client(int s, struct sockaddr_rc *rem_addr, socklen_t *opt) {
+/*
+* Lock the computer, cleanup memory and open fd, and terminate program
+*
+* @param server_data: a struct that contains fd that needs to be closed
+*/
+void lock(struct server_data_t *server_data) {
+    system("dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.Lock");
+    if (server_data) {
+        terminate_server(server_data->server, *(server_data->client), server_data->session);
+        exit(0);
+    }
+}
+
+/*
+* Return 1 iff the given bluetooth address in the argument is valid
+*
+* @param argc: number of arguments (always >= 1 due to program name stored in argv[0])
+* @param argv: array that contains cmdline arguments
+* @return: True iff the cmd argument is a valid bluetooth address
+*/
+int check_arg(int argc, char **argv) {
+    if (argc <= 1) {
+        fprintf(stderr, "usage: %s bt_addr\n", argv[0]);
+        return 0;
+    }
+
+    if (!verify_bt_addr(argv[1], NULL)) {
+        fprintf(stderr, "%s: %s is not a valid bluetooth address\n", argv[0], argv[1]);
+        return 0;
+    }
+    return 1;
+}
+
+/*
+* Return 1 iff the given bluetooth address is trusted and paired
+*
+* @param bt_addr: the address of the bluetooth to check
+* @return: True iff given bluetooth address is a trusted and pired device
+*/
+int is_trusted_client(char *bt_addr, const char *trusted_dir_path) {
+    int status = 0;
+
+    int num_of_paired, num_of_devices;
+    char *username = getlogin();
+
+    char **paired_devices = get_paired_devices(&num_of_paired);
+    char **trusted_devices;
+
+    if (!(trusted_devices = find_trusted_devices(NULL, trusted_dir_path, username, &num_of_devices))) {
+        goto is_trusted_terminate;
+    }
+
+    //check if device is paired
+    if (!(is_dev_trusted(NULL, bt_addr, paired_devices, num_of_paired))) {
+        goto is_trusted_terminate;
+    }
+
+    //check if device is in trusted list
+    if (!is_dev_trusted(NULL, bt_addr, trusted_devices, num_of_devices)) {
+        goto is_trusted_terminate;
+    }
+
+    status = 1;
+
+is_trusted_terminate:
+    if (trusted_devices) {
+        free_device_list(trusted_devices, num_of_devices);
+    }
+
+    if (paired_devices) {
+        free_device_list(paired_devices, num_of_paired);
+    }
+
+    return status;
+}
+
+/*
+* Connect a new client. If client is not from a trusted device nor authorized then lock the system.
+*
+* @param s: server's socket
+* @param rem_addr: a pointer to sockaddr structure that will store the address of the client socket
+* @param opt: the size of rem_addr
+* @param authorized_dev: the address of the trusted device
+* @param server_data: a struct that contains fd that needs to be closed before termination
+* @return: The client's socket
+*/
+int connect_client(int s, struct sockaddr_rc *rem_addr, socklen_t *opt, char *authorized_dev, struct server_data_t *server_data) {
     // accept one connection
     char buf[1024] = { 0 };
-
     int client = accept(s, (struct sockaddr *)rem_addr, opt);
     fcntl(client, F_SETFL, O_NONBLOCK); //set FD to nonblocking 
 
     //bdaddr_t stores information about the bluetooth device address.
     ba2str(&(rem_addr->rc_bdaddr), buf); //converts the bluetooth data structure to string
+
     fprintf(stderr, "accepted connection from %s\n", buf);
+
+    if (!is_trusted_client(buf, trusted_dir_path) || strcmp(buf, authorized_dev) != 0) {
+        printf("%s is not trusted or not authorized to deauthenticate the system\n", buf);
+        lock(server_data);
+    }
 
     return client;
 }
@@ -214,21 +339,32 @@ int connect_client(int s, struct sockaddr_rc *rem_addr, socklen_t *opt) {
 int main (int argc, char **argv)
 {
     struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
-    int s, client, bytes_read;
+    int server = -1, client = -1, bytes_read;
     socklen_t opt = sizeof(rem_addr);
+    sdp_session_t *session = NULL; //SDP socket
 
-    s = init_server(&loc_addr);
+    if (!check_arg(argc, argv)) {
+        lock(NULL);
+    }
+    //check if the device passed is trusted
+    if (!is_trusted_client(argv[1], trusted_dir_path)) {
+        lock(NULL);
+    }
 
-    
+
+    server = init_server(&loc_addr, &session);
+
+    struct server_data_t server_data = {server, &client, session};
+
     time_t start, stop;
     int is_locked = 0; 
-    client = -1;
 
-    int state = 1;
+    //listen_lock_status(server, &client, session);
+    client = -1;
 
     while(1) {
         if (client < 0) {
-            client = connect_client(s, &rem_addr, &opt);
+            client = connect_client(server, &rem_addr, &opt, argv[1], &server_data);
             start = time(NULL);
             is_locked = 0; 
         }
@@ -242,19 +378,13 @@ int main (int argc, char **argv)
             printf("received [%s]\n", buf);
             start = time(NULL);
             is_locked = 0; 
-            bytes_read = write(client,buf,sizeof(buf));
-            printf("wrote [%s]\n", buf);
     	}
-
-        //
         
         stop = time(NULL);  
         if ((stop - start) > 10 && !is_locked){
             //exec no response being read lock user out
-            is_locked = 1; 
-            close(client);
-            client = -1;
-            system("dbus-send --type=method_call --dest=org.gnome.ScreenSaver /org/gnome/ScreenSaver org.gnome.ScreenSaver.Lock");
+            is_locked = 1;
+            lock(&server_data);
             break;
         }
     	
@@ -263,8 +393,5 @@ int main (int argc, char **argv)
     	}
     }
 
-    // close connection
-    close(client);
-    close(s);
     return 0;
 }

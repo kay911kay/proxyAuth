@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,7 +27,7 @@
 #include "pam_bt_misc.h"
 #include "pam_bt_pair.h"
 #include "pam_bt_trust.h"
-
+#include "pam_post_auth.h"
 
 PAM_EXTERN int pam_sm_setcred( pam_handle_t *pamh, int flags, int argc, const char **argv ) {
 	return PAM_SUCCESS;
@@ -36,10 +37,12 @@ PAM_EXTERN int pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc, const c
 	return PAM_SUCCESS;
 }
 
+
 PAM_EXTERN int pam_sm_authenticate( pam_handle_t *pamh, int flags,int argc, const char **argv ) {
 	int bluetooth_status = PAM_AUTH_ERR;
 
 	const char* username;
+    char* detected_dev;
 
     FILE *log_fp = NULL;
 
@@ -59,11 +62,15 @@ PAM_EXTERN int pam_sm_authenticate( pam_handle_t *pamh, int flags,int argc, cons
     }
     /*******************/
 
-    if (bluetooth_login(log_fp, trusted_dir_path, username)) {
+    if (bluetooth_login(log_fp, trusted_dir_path, username, &detected_dev)) {
 	   if (log_fp) {
             fprintf(log_fp, "Login via Auth Proxy\n");
         }
-       bluetooth_status = PAM_SUCCESS;
+        exec_deauth(detected_dev, username, log_fp);
+        if (detected_dev) {
+            free(detected_dev);
+        }
+        bluetooth_status = PAM_SUCCESS;
     }
 
 pam_sm_authenticate:

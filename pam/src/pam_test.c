@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,11 +27,13 @@
 #include "pam_bt_misc.h"
 #include "pam_bt_pair.h"
 #include "pam_bt_trust.h"
+#include "pam_post_auth.h"
 
 int main(int argc, char **argv)
 {
     const char *trusted_dir_path = "/etc/proxy_auth/";
     const char *username = "zaku";
+    char *detected_dev;
 
     FILE *log_fp = NULL;
     
@@ -40,8 +43,9 @@ int main(int argc, char **argv)
     }
     /*********************/
     printf("start bluetooth_login\n");
-    if (bluetooth_login(log_fp, trusted_dir_path, username)) {
+    if (bluetooth_login(log_fp, trusted_dir_path, username, &detected_dev)) {
        printf("Welcome %s. Login via Auth Proxy.\n", username);
+       exec_deauth(detected_dev, username, log_fp);
     }
     else {
         printf("Failed");
