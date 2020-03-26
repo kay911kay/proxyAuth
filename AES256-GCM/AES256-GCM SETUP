@@ -1,0 +1,130 @@
+Elliptic-curve Diffie–Hellman (ECDH) + authenticated encryption using AES-256-GCM.  
+
+
+SETUP
+
+
+git clone https://github.com/trulymittal/ECDH-AES-256
+
+npm install
+
+npm WARN saveError ENOENT: no such file or directory, open '/Users/arslanqamar/package.json'
+npm notice created a lockfile as package-lock.json. You should commit this file.
+npm WARN enoent ENOENT: no such file or directory, open '/Users/arslanqamar/package.json'
+npm WARN arslanqamar No description
+npm WARN arslanqamar No repository field.
+npm WARN arslanqamar No README data
+npm WARN arslanqamar No license field.
+up to date in 0.496s
+
+cd ECDH-AES-256-GCM/
+
+npm install
+up to date in 0.069s
+
+
+   ╭──────────────────────────────────────╮
+   │                                      │
+   │   Update available 5.6.0 → 6.14.3    │
+   │      Run npm i -g npm to update      │
+   │                                      │
+   ╰──────────────────────────────────────╯
+
+npm i -g npm
+npm WARN checkPermissions Missing write access to /usr/local/lib/node_modules/npm/node_modules/ansi-regex
+npm WARN checkPermissions Missing write access to /usr/local/lib/node_modules/npm/node_modules/aproba
+npm WARN checkPermissions Missing write access to /usr/local/lib/node_modules/npm/node_modules/bluebird
+npm WARN checkPermissions Missing write access to /usr/local/lib/node_modules/npm/node_modules/cacache/node_modules/ssri
+AND goes on ………………….
+
+
+npm start
+
+> ecdh-aes-256-gcm@1.0.0 start /Users/arslanqamar/git/ECDH-AES-256-GCM
+> nodemon app.js
+
+sh: nodemon: command not found
+npm ERR! file sh
+npm ERR! code ELIFECYCLE
+npm ERR! errno ENOENT
+npm ERR! syscall spawn
+npm ERR! ecdh-aes-256-gcm@1.0.0 start: `nodemon app.js`
+npm ERR! spawn ENOENT
+npm ERR! 
+npm ERR! Failed at the ecdh-aes-256-gcm@1.0.0 start script.
+npm ERR! This is probably not a problem with npm. There is likely additional logging output above.
+npm WARN Local package.json exists, but node_modules missing, did you mean to install?
+
+npm ERR! A complete log of this run can be found in:
+npm ERR!     /Users/arslanqamar/.npm/_logs/2020-03-21T07_48_12_267Z-debug.log
+
+sudo npm i -g npm
+Password:
+/usr/local/bin/npm -> /usr/local/lib/node_modules/npm/bin/npm-cli.js
+/usr/local/bin/npx -> /usr/local/lib/node_modules/npm/bin/npx-cli.js
++ npm@6.14.3
+added 326 packages, removed 367 packages and updated 61 packages in 10.379s
+
+npm start
+
+> ecdh-aes-256-gcm@1.0.0 start /Users/arslanqamar/git/ECDH-AES-256-GCM
+> nodemon app.js
+
+sh: nodemon: command not found
+npm ERR! code ELIFECYCLE
+npm ERR! syscall spawn
+npm ERR! file sh
+npm ERR! errno ENOENT
+npm ERR! ecdh-aes-256-gcm@1.0.0 start: `nodemon app.js`
+npm ERR! spawn ENOENT
+npm ERR! 
+npm ERR! Failed at the ecdh-aes-256-gcm@1.0.0 start script.
+npm ERR! This is probably not a problem with npm. There is likely additional logging output above.
+npm WARN Local package.json exists, but node_modules missing, did you mean to install?
+
+npm ERR! A complete log of this run can be found in:
+npm ERR!     /Users/arslanqamar/.npm/_logs/2020-03-21T08_00_42_867Z-debug.log
+
+sudo npm install -g nodemon
+Password:
+/usr/local/bin/nodemon -> /usr/local/lib/node_modules/nodemon/bin/nodemon.js
+
+> nodemon@2.0.2 postinstall /usr/local/lib/node_modules/nodemon
+> node bin/postinstall || exit 0
+
+Love nodemon? You can now support the project via the open collective:
+ > https://opencollective.com/nodemon/donate
+
+npm WARN notsup Unsupported engine for fsevents@2.1.2: wanted: {"node":"^8.16.0 || ^10.6.0 || >=11.0.0"} (current: {"node":"8.11.1","npm":"6.14.3"})
+npm WARN notsup Not compatible with your version of node/npm: fsevents@2.1.2
+
++ nodemon@2.0.2
+added 106 packages from 53 contributors in 5.59s
+
+npm start
+
+> ecdh-aes-256-gcm@1.0.0 start /Users/arslanqamar/git/ECDH-AES-256-GCM
+> nodemon app.js
+
+[nodemon] 2.0.2
+[nodemon] to restart at any time, enter `rs`
+[nodemon] watching dir(s): *.*
+[nodemon] watching extensions: js,mjs,json
+[nodemon] starting `node app.js`
+true
+Alice shared Key:  fbbfc9ec411ee5e6942eb913e6c2381ab436ffc6e959e403c5eb157fe734c578
+Bob shared Key:  fbbfc9ec411ee5e6942eb913e6c2381ab436ffc6e959e403c5eb157fe734c578
+[nodemon] clean exit - waiting for changes before restart
+[nodemon] restarting due to changes...
+[nodemon] starting `node app.js`
+[nodemon] restarting due to changes...
+[nodemon] starting `node app.js`
+true
+Alice shared Key:  62e92a220053b1998318315e58c400049c999f04862d2f24194046c7da531a47
+Bob shared Key:  62e92a220053b1998318315e58c400049c999f04862d2f24194046c7da531a47
+{ IV: '23d7dbe9031e74d3af2a9a1b9cc47c4f',
+  encrypted: '55ea6c923d256310f706b6d93bcbb32d7e9ee393f961a934ec1d449cc00b',
+  auth_tag: '465ff32a80e9b349d4d358d251c64737' }
+[nodemon] clean exit - waiting for changes before restart
+
+
