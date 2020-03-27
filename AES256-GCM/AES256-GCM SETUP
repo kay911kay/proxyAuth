@@ -1,10 +1,9 @@
-Elliptic-curve Diffie–Hellman (ECDH) + authenticated encryption using AES-256-GCM.  
+Elliptic-curve Diffie–Hellman (ECDH) + AUthenticated Encryption using AES-256-GCM.  
 
 
 SETUP
 
-
-git clone https://github.com/trulymittal/ECDH-AES-256
+Assuming you already have the repository
 
 npm install
 
