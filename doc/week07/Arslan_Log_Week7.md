@@ -3,7 +3,7 @@
 ---
 
 ## OBJECTIVES
-* **Previously,**  
+* **Previously,** Setup the UberTooth device, worked on UberTooth different modes including Capturing BLE in WireShark and repeater mode (includes a lot of setup and testing)
 * Setup for Elliptic-curve Diffie–Hellman (ECDH) + Authenticated Encryption using AES-256-GCM.  
 
 
@@ -13,11 +13,13 @@
 * https://raspberrypi.stackexchange.com/questions/41776/failed-to-connect-to-sdp-server-on-ffffff000000-no-such-file-or-directory
 * https://www.lifewire.com/ultimate-windows-7-ubuntu-linux-dual-boot-guide-2200653
 * https://linuxize.com/post/how-to-enable-ssh-on-ubuntu-18-04/
+* https://github.com/greatscottgadgets/ubertooth/wiki
+* https://github.com/greatscottgadgets/ubertooth/issues/194
+* https://manpages.debian.org/testing/ubertooth/ubertooth-util.1.en.html
+* https://github.com/greatscottgadgets/ubertooth/blob/master/host/doc/ubertooth-util.md
 * https://github.com/trulymittal/ECDH-AES-256-GCM
 
 ## TODO
-* 
-* 
 * 
 
 ---
