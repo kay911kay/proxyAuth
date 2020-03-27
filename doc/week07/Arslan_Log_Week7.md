@@ -88,27 +88,6 @@ added 326 packages, removed 367 packages and updated 61 packages in 10.379s
 ```
 
 
-* Now start the npm `npm install`
-```
-> ecdh-aes-256-gcm@1.0.0 start /Users/arslanqamar/git/ECDH-AES-256-GCM
-> nodemon app.js
-
-sh: nodemon: command not found
-npm ERR! code ELIFECYCLE
-npm ERR! syscall spawn
-npm ERR! file sh
-npm ERR! errno ENOENT
-npm ERR! ecdh-aes-256-gcm@1.0.0 start: `nodemon app.js`
-npm ERR! spawn ENOENT
-npm ERR! 
-npm ERR! Failed at the ecdh-aes-256-gcm@1.0.0 start script.
-npm ERR! This is probably not a problem with npm. There is likely additional logging output above.
-npm WARN Local package.json exists, but node_modules missing, did you mean to install?
-
-npm ERR! A complete log of this run can be found in:
-npm ERR!     /Users/arslanqamar/.npm/_logs/2020-03-21T08_00_42_867Z-debug.log
-```
-
 * npm start, Alice Shared and Bob Shared Key are shown. From now on every single time saving the file would display the new result
 ```
 > ecdh-aes-256-gcm@1.0.0 start /Users/arslanqamar/git/ECDH-AES-256-GCM
