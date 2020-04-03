@@ -219,92 +219,96 @@ int connect_client(int s, struct sockaddr_rc *rem_addr, socklen_t *opt) {
     return client;
 }
 
-void init_ssl()
+void rand_str(char *dest, size_t length) 
 {
-    SSL_load_error_strings();
-    SSL_library_init();
-    OpenSSL_add_all_algorithms();
+    char charset[] = "0123456789"
+                     "abcdefghijklmnopqrstuvwxyz"
+                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    srand(time(0));
+
+    while (length-- > 0) {
+        size_t index = (double) rand() / RAND_MAX * (sizeof charset - 1);
+        *dest++ = charset[index];
+    }
+
+    *dest = '\0';
 }
 
-void shutdown_ssl(SSL *cSSL)
+unsigned char *generate_key()
 {
-    SSL_shutdown(cSSL);
-    SSL_free(cSSL);
+     unsigned char md[40];
+     char r[256];
+     rand_str(r, strlen(r));
+
+     return SHA256((const unsigned char *)r, strlen(r), md);
 }
 
-SSL *establish_ssl(int client, EVP_PKEY *pkey)
+void encrypt(unsigned char *input, unsigned char *output, unsigned char* key)
 {
-    SSL_CTX *ctx = SSL_CTX_new( SSLv23_server_method());
-    // SSL_CTX_set_options(sslctx, SSL_OP_SINGLE_DH_USE);
+    int in_len = strlen((char*)input) - 16;
+    int out_len;
 
-    SSL_CTX_use_PrivateKey(ctx, pkey);
-    // SSL_CTX_use_certificate_file(sslctx, "/serverCert.pem" , SSL_FILETYPE_PEM);
+    int len = 0;
 
-    SSL *cSSL = SSL_new(ctx);
-    SSL_set_fd(cSSL, client);
+    char *IV = "0000000000000";
 
-    if(SSL_accept(cSSL) <= 0)
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    const EVP_CIPHER *cipher = EVP_aes_256_gcm();
+
+    EVP_EncryptInit (ctx, cipher, NULL, NULL);
+    EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_SET_IVLEN, strlen(IV), NULL);
+
+    EVP_EncryptInit (ctx, cipher, (const unsigned char *)key, (const unsigned char *)IV);
+
+    while(len <= in_len - 128)
     {
-        shutdown_ssl(cSSL);
-        return NULL;
+	EVP_EncryptUpdate (ctx, output + len, &out_len, input + len, 128);
+        len += 128;
     }
 
-    return cSSL;
+    EVP_EncryptUpdate (ctx, output + len, &out_len, input + len, in_len - len);
+    EVP_EncryptFinal(ctx, output + len, &out_len);
+
+    // Appending tag, len should be equal to in_len by this point
+    EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_GET_TAG, 16, (unsigned char *)output + len);
+
+    EVP_CIPHER_CTX_free(ctx);
 }
 
-EVP_PKEY *establish_key(int client)
+int decrypt(unsigned char *input, unsigned char *output, unsigned char* key)
 {
-    RAND_poll();
+    int in_len = strlen((char*)input) - 16;
+    int out_len;
 
-    EVP_PKEY_CTX *ctx;
-    EVP_PKEY *pkey = NULL;
+    int len = 0;
+    int success;
 
-    ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+    char *IV = "0000000000000";
 
-    if(!ctx)
-	return NULL;
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    const EVP_CIPHER *cipher = EVP_aes_256_gcm();
 
-    if (EVP_PKEY_keygen_init(ctx) <= 0)
-	return NULL;
+    EVP_DecryptInit (ctx, cipher, NULL, NULL);
+    EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_SET_IVLEN, strlen(IV), NULL);
 
-    if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 1024) <= 0)
-	return NULL;
+    // Set tag
+    EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_SET_TAG, 16, input + in_len);
 
+    EVP_DecryptInit (ctx, cipher, (const unsigned char *)key, (const unsigned char *)IV);
 
-    if (EVP_PKEY_keygen(ctx, &pkey) <= 0)
-	return NULL;
-
-    return pkey;
-}
-/*
-void ec_copy_public_key(EVP_PKEY *pKey, uint8_t *keybuf)
-{
-    EC_KEY *pEcKey;
-    uint8_t encoded_key[MAX_KEYLEN_X962];
-    uint8_t *pMem;
-    int keylen = 0;
-
-    pEcKey = (EC_KEY *)EVP_PKEY_get0(pKey);
-
-    if (pEcKey){
-	pMem = encoded_key;
-        keylen = i2o_ECPublicKey(pEcKey, &pMem);
-
-	if (keylen){
-	    keylen = ipsec_ec_x962_decode(pEcKey, encoded_key, keylen, keybuf);
-	}
+    while(len <= in_len - 128)
+    {
+	EVP_DecryptUpdate (ctx, output + len, &out_len, input + len, 128);
+        len += 128;
     }
-}*/
 
-void send_public_key(int client, EVP_PKEY *pkey)
-{
-    //uint8_t public_key[128];
-    //ec_copy_public_key(pkey, public_key);
-    
-    FILE *f;
-    f = fopen("key.txt", "w");
-    
-    PEM_write_PUBKEY(f, pkey);
+    EVP_DecryptUpdate (ctx, output + len, &out_len, input + len, in_len - len);
+    success = EVP_DecryptFinal(ctx, output + len, &out_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+
+    return success;
 }
 
 int main (int argc, char **argv)
@@ -313,10 +317,10 @@ int main (int argc, char **argv)
     int s, client, bytes_read;
     socklen_t opt = sizeof(rem_addr);
 
-    SSL *cSSL;
-    EVP_PKEY *pkey;
+    unsigned char *key = generate_key();
 
-    init_ssl();
+    // TODO: Generate QR Code
+
     s = init_server(&loc_addr);
 
     time_t start, stop;
@@ -328,39 +332,36 @@ int main (int argc, char **argv)
     while(1) {
         if (client < 0) {
             client = connect_client(s, &rem_addr, &opt);
-	
-	    pkey = establish_key(client);
-	    send_public_key(client, pkey);
-            cSSL = establish_ssl(client, pkey);
-
-            if (!cSSL)
-            {
-		close(client);
-		close(s);
-
-		EVP_PKEY_free(pkey);
-
-		return -1;
-            }
 
             start = time(NULL);
             is_locked = 0; 
         }
 
-    	char buf[1024];
+    	unsigned char buf[1024];
+        unsigned char plaintext[1024];
+
     	memset(buf, 0, sizeof(buf));
 
-    	// read data from the client
-    	bytes_read = SSL_read(cSSL, buf, sizeof(buf));
-    	if(bytes_read > 0) {
-            printf("received [%s]\n", buf);
+    	bytes_read = read(client, buf, sizeof(buf));
+        if (decrypt(buf, plaintext, key) < 1)
+        {
+	    printf("Failed decryption!\n");
+	}
+        else
+        {
+	    if(bytes_read > 0) {
+	    unsigned char ciphertext[strlen((char *)plaintext) + 16]; // 16 bytes for tag
+
+            printf("received [%s]\n", plaintext);
             start = time(NULL);
             is_locked = 0; 
-            bytes_read = write(client,buf,sizeof(buf));
-            printf("wrote [%s]\n", buf);
-    	}
+	
+	    encrypt(plaintext, ciphertext, key);
 
-        //
+            bytes_read = write(client, ciphertext, sizeof(ciphertext));
+            printf("wrote (encrypted) [%s]\n", ciphertext);
+    	    }
+        }
         
         stop = time(NULL);  
         if ((stop - start) > 10 && !is_locked){
@@ -372,13 +373,13 @@ int main (int argc, char **argv)
             break;
         }
     	
-    	if (bytes_read > 0 && SSL_write(cSSL, buf, strlen(buf) < 0)) {
+    	if (bytes_read > 0 && write(client, buf, strlen((char *)buf) < 0)) {
     	    perror("Error writing to client");	
     	}
     }
 
-    EVP_PKEY_free(pkey);
-    shutdown_ssl(cSSL);
+    //EVP_PKEY_free(pkey);
+    //shutdown_ssl(cSSL);
 
     // close connection
     close(client);
