@@ -11,6 +11,9 @@ import android.util.Log
 import android.widget.Toast
 import java.io.IOException
 import java.util.*
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 class BluetoothInteraction : IntentService("BluetoothInteraction") {
     companion object {
@@ -21,6 +24,7 @@ class BluetoothInteraction : IntentService("BluetoothInteraction") {
         lateinit var m_address: String
         lateinit var m_name: String
         private val mmBuffer: ByteArray = ByteArray(1024) // mmBuffer store for the stream
+        private val secret : String = "proxyauth0123456"
     }
 
     override fun onHandleIntent(intent: Intent) {
@@ -32,6 +36,7 @@ class BluetoothInteraction : IntentService("BluetoothInteraction") {
         if (!connect()) {
 
         }
+
         runServer()
     }
 
@@ -40,8 +45,8 @@ class BluetoothInteraction : IntentService("BluetoothInteraction") {
             try{
                 //Log.d("data", "DATA Incoming")
                 Log.d("data", input)
-                m_bluetoothSocket!!.outputStream.write(input.toByteArray())
-            } catch (e: IOException){
+                m_bluetoothSocket!!.outputStream.write(encrypt(secret, input).toByteArray())
+            } catch (e: IOException) {
                 e.printStackTrace()
             }
         }
@@ -114,14 +119,51 @@ class BluetoothInteraction : IntentService("BluetoothInteraction") {
             // Keep listening to the InputStream until an exception occurs.
             // Read from the InputStream.
             numBytes = m_bluetoothSocket!!.inputStream.read(mmBuffer)
+
             Log.d("data", numBytes.toString())
             Log.d("data", mmBuffer.toString(Charsets.UTF_8))
             Toast.makeText(this, mmBuffer.toString(Charsets.UTF_8), Toast.LENGTH_LONG)
-            return mmBuffer.toString(Charsets.UTF_8)
+            return decrypt(secret, mmBuffer.toString(Charsets.UTF_8))
         } catch (e: IOException) {
             Log.d("data", "Input stream was disconnected", e)
         }
         return ""
+    }
+
+    fun encrypt(password: String, input: String):String {
+        val secretKeySpec = SecretKeySpec(password.toByteArray(), "AES")
+        val iv = ByteArray(16)
+        val charArray = password.toCharArray()
+        for (i in 0 until charArray.size){
+            iv[i] = charArray[i].toByte()
+        }
+        val ivParameterSpec = IvParameterSpec(iv)
+
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, ivParameterSpec)
+
+        val encryptedValue = cipher.doFinal(input.toByteArray())
+        //return Base64.encodeToString(encryptedValue, Base64.DEFAULT)
+        return encryptedValue.toString()
+    }
+
+    fun decrypt(password: String, input: String): String {
+        val secretKeySpec = SecretKeySpec(password.toByteArray(), "AES")
+        val iv = ByteArray(16)
+        val charArray = password.toCharArray()
+        for (i in 0 until charArray.size){
+            iv[i] = charArray[i].toByte()
+        }
+
+        val ivParameterSpec = IvParameterSpec(iv)
+
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, ivParameterSpec)
+
+        //val decryptedByteValue = cipher.doFinal(Base64.decode(this, Base64.DEFAULT))
+        val decryptedByteValue = cipher.doFinal(input.toByteArray())
+        //cipher.doFinal()
+        return String(decryptedByteValue)
     }
 }
 
