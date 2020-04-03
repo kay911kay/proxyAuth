@@ -16,6 +16,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <openssl/ssl.h>
+#include <openssl/rsa.h>
+#include <openssl/rand.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include "qrcodegen.h"
+
 #include "pam_misc.h"
 #include "pam_bt_misc.h"
 #include "pam_bt_pair.h"
@@ -331,6 +338,100 @@ int connect_client(int s, struct sockaddr_rc *rem_addr, socklen_t *opt, char *au
     return client;
 }
 
+void rand_str(char *dest, size_t length) 
+{
+    char charset[] = "0123456789"
+                     "abcdefghijklmnopqrstuvwxyz"
+                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    srand(time(0));
+
+    while (length-- > 0) {
+        size_t index = (double) rand() / RAND_MAX * (sizeof charset - 1);
+        *dest++ = charset[index];
+    }
+
+    *dest = '\0';
+}
+
+unsigned char *generate_key()
+{
+     unsigned char md[40];
+     char r[256];
+     rand_str(r, strlen(r));
+
+     return SHA256((const unsigned char *)r, strlen(r), md);
+}
+
+void encrypt(unsigned char *input, unsigned char *output, unsigned char* key)
+{
+    int in_len = strlen((char*)input) - 16;
+    int out_len;
+
+    int len = 0;
+
+    char *IV = "0000000000000";
+
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    const EVP_CIPHER *cipher = EVP_aes_256_gcm();
+
+    EVP_EncryptInit (ctx, cipher, NULL, NULL);
+    EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_SET_IVLEN, strlen(IV), NULL);
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
+
+    EVP_EncryptInit (ctx, cipher, (const unsigned char *)key, (const unsigned char *)IV);
+
+    while(len <= in_len - 128)
+    {
+	EVP_EncryptUpdate (ctx, output + len, &out_len, input + len, 128);
+        len += 128;
+    }
+
+    EVP_EncryptUpdate (ctx, output + len, &out_len, input + len, in_len - len);
+    EVP_EncryptFinal(ctx, output + len, &out_len);
+
+    // Appending tag, len should be equal to in_len by this point
+    EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_GET_TAG, 16, (unsigned char *)output + len);
+
+    EVP_CIPHER_CTX_free(ctx);
+}
+
+int decrypt(unsigned char *input, unsigned char *output, unsigned char* key)
+{
+    int in_len = strlen((char*)input) - 16;
+    int out_len;
+
+    int len = 0;
+    int success;
+
+    char *IV = "0000000000000";
+
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    const EVP_CIPHER *cipher = EVP_aes_256_gcm();
+
+    EVP_DecryptInit (ctx, cipher, NULL, NULL);
+    EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_SET_IVLEN, strlen(IV), NULL);
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
+
+    // Set tag
+    EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_SET_TAG, 16, input + in_len);
+
+    EVP_DecryptInit (ctx, cipher, (const unsigned char *)key, (const unsigned char *)IV);
+
+    while(len <= in_len - 128)
+    {
+	EVP_DecryptUpdate (ctx, output + len, &out_len, input + len, 128);
+        len += 128;
+    }
+
+    EVP_DecryptUpdate (ctx, output + len, &out_len, input + len, in_len - len);
+    success = EVP_DecryptFinal(ctx, output + len, &out_len);
+
+    EVP_CIPHER_CTX_free(ctx);
+
+    return success;
+}
+
 int main (int argc, char **argv)
 {
     struct sockaddr_rc loc_addr = { 0 }, rem_addr = { 0 };
@@ -346,7 +447,21 @@ int main (int argc, char **argv)
         lock(NULL);
     }
 
+    unsigned char *key = generate_key();
 
+
+/* QR Code implementation, doesn't save to image or print to screen yet
+    
+    uint8_t qr0[qrcodegen_BUFFER_LEN_MAX];
+    uint8_t tempBuffer[qrcodegen_BUFFER_LEN_MAX];
+
+    int ok = qrcodegen_encodeText((const char *)key, tempBuffer, 
+	qr0, qrcodegen_Ecc_MEDIUM, qrcodegen_VERSION_MIN, 
+	qrcodegen_VERSION_MAX, qrcodegen_Mask_AUTO, true);
+
+    if (!ok)
+        return;
+*/
     server = init_server(&loc_addr, &session);
 
     struct server_data_t server_data = {server, &client, session};
@@ -367,7 +482,9 @@ int main (int argc, char **argv)
             is_locked = 0; 
         }
 
-    	char buf[1024];
+    	unsigned char buf[1024];
+        unsigned char plaintext[1024];
+
     	memset(buf, 0, sizeof(buf));
 
     	// read data from the client
@@ -375,7 +492,16 @@ int main (int argc, char **argv)
     	if(bytes_read > 0) {
             printf("received [%s]\n", buf);
             start = time(NULL);
-            is_locked = 0; 
+            is_locked = 0;
+
+            if (decrypt(buf, plaintext, key) < 1)
+            {
+	    	printf("Failed decryption!\n");
+	    }
+	    else 
+	    {
+		printf("Decrypted received: [%s]\n", plaintext); 
+	    }
     	}
         
         if(bytes_read > 0 && num_bytes_read < INT_MAX){ //read something, lets append some data to the msg array
@@ -400,8 +526,11 @@ int main (int argc, char **argv)
             lock(data_obj);
             break;
         }
+
+	unsigned char ciphertext[strlen(buf) + 16];
+        encrypt(buf, ciphertext, key);
     	
-    	if (bytes_read > 0 && write(client, buf, strlen(buf) < 0)) {
+    	if (bytes_read > 0 && write(client, ciphertext, strlen((char *)ciphertext) < 0)) {
     	    perror("Error writing to client");	
     	}
         check_lock_status(data_obj->context);

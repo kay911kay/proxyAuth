@@ -11,13 +11,12 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <time.h>
-#include "aes.h"
-#include "dh.h"
 #include <openssl/ssl.h>
 #include <openssl/rsa.h>
 #include <openssl/rand.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
+#include "qrcodegen.h"
 
 
 #define SERVICE_NAME "Proxy Auth"
@@ -258,6 +257,7 @@ void encrypt(unsigned char *input, unsigned char *output, unsigned char* key)
 
     EVP_EncryptInit (ctx, cipher, NULL, NULL);
     EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_SET_IVLEN, strlen(IV), NULL);
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
 
     EVP_EncryptInit (ctx, cipher, (const unsigned char *)key, (const unsigned char *)IV);
 
@@ -291,6 +291,7 @@ int decrypt(unsigned char *input, unsigned char *output, unsigned char* key)
 
     EVP_DecryptInit (ctx, cipher, NULL, NULL);
     EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_SET_IVLEN, strlen(IV), NULL);
+    EVP_CIPHER_CTX_set_padding(ctx, 0);
 
     // Set tag
     EVP_CIPHER_CTX_ctrl (ctx, EVP_CTRL_GCM_SET_TAG, 16, input + in_len);
@@ -319,7 +320,15 @@ int main (int argc, char **argv)
 
     unsigned char *key = generate_key();
 
-    // TODO: Generate QR Code
+    uint8_t qr0[qrcodegen_BUFFER_LEN_MAX];
+    uint8_t tempBuffer[qrcodegen_BUFFER_LEN_MAX];
+
+    int ok = qrcodegen_encodeText((const char *)key, tempBuffer, 
+	qr0, qrcodegen_Ecc_MEDIUM, qrcodegen_VERSION_MIN, 
+	qrcodegen_VERSION_MAX, qrcodegen_Mask_AUTO, true);
+
+    if (!ok)
+        return;
 
     s = init_server(&loc_addr);
 

@@ -8,6 +8,7 @@ LINUX_PAM_PATH = /lib/security/
 DEAUTH_PATH = /etc/proxy_auth/
 PAM_PATH = $(LINUX_PAM_PATH)/pam_proxy.so
 BLUETOOTH_LIB = -lbluetooth
+OPENSSL_LIB += -lcrypto -lssl
 LDLIBS = -lc
 SRC = src
 LIB_DEP = $(SRC)/pam_bt_misc.h $(SRC)/pam_bt_pair.h $(SRC)/pam_bt_misc.h $(SRC)/pam_bt_trust.h
@@ -31,7 +32,7 @@ pam_test: $(SRC)/pam_test.c $(LIB_DEP)
 	$(CC) -o $@ $< $(CFLAGS) $(PFLAGS) -fsanitize=address $(BLUETOOTH_LIB) $(G_CFLAGS) $(GLIB)
 
 deauth: $(SRC)/deauth.c $(LIB_DEP)
-	$(CC) -o $(DEAUTH_PATH)$@ $< $(CFLAGS) -fsanitize=address $(BLUETOOTH_LIB) $(G_CFLAGS) $(GLIB) 
+	$(CC) -o $(DEAUTH_PATH)$@ $< $(CFLAGS) -fsanitize=address $(BLUETOOTH_LIB) $(OPENSSL_LIB) $(G_CFLAGS) $(GLIB) 
 
 install: 
 	perl install.pl
