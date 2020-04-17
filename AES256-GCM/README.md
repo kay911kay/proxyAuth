@@ -11,6 +11,7 @@ In this repo we will use only the **crypto** module that is built inside nodejs.
 ## Authors
 
 - [**Truly Mittal**](https://trulymittal.com)
+- Arslan Ahmed Qamar
 
 ## License
 
